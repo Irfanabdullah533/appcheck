@@ -140,7 +140,10 @@
           </div>
 
           <div>
-            <label for="meaningInput" class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Meaning & Context</label>
+            <div class="flex items-center justify-between mb-1">
+              <label for="meaningInput" class="block text-xs font-semibold text-slate-700 uppercase tracking-wider">Meaning & Context</label>
+              <button type="button" id="lookupMeaningBtn" class="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 transition">🔍 Auto-Fill Meaning</button>
+            </div>
             <textarea 
               id="meaningInput" 
               rows="3" 
@@ -488,16 +491,63 @@
       return `${h}:${mStr} ${ampm}`;
     }
 
+    function stripQuotesAndUrls(str) {
+      return (str || '')
+        .replace(/https?:\/\/\S+/gi, '')
+        .replace(/^[\s"'“”‘’]+|[\s"'“”‘’]+$/g, '')
+        .trim();
+    }
+
+    async function fetchDictionaryMeaning(word) {
+      const cleanWord = stripQuotesAndUrls(word).split(/\s+/)[0];
+      if (!cleanWord) return '';
+      try {
+        const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(cleanWord)}`);
+        if (!res.ok) return '';
+        const data = await res.json();
+        const firstEntry = Array.isArray(data) ? data[0] : null;
+        const firstMeaning = firstEntry?.meanings?.[0];
+        const firstDef = firstMeaning?.definitions?.[0]?.definition;
+        if (!firstDef) return '';
+        const pos = firstMeaning.partOfSpeech ? `(${firstMeaning.partOfSpeech}) ` : '';
+        return `${pos}${firstDef}`;
+      } catch (e) {
+        return '';
+      }
+    }
+
+    async function autoFillMeaningForWord(word) {
+      const meaningEl = document.getElementById('meaningInput');
+      meaningEl.placeholder = 'Looking up dictionary meaning...';
+      const def = await fetchDictionaryMeaning(word);
+      meaningEl.placeholder = 'e.g. Present, appearing, or found everywhere.';
+      if (def) {
+        meaningEl.value = def;
+        showToast(`Fetched meaning for "${word}"`, '📖');
+      } else {
+        showToast('Could not auto-fetch meaning — type or paste it below', '💡');
+      }
+    }
+
     function parseSharedText(rawText, rawTitle = '') {
-      const cleaned = (rawText || '').trim();
+      const withoutUrls = (rawText || '').replace(/https?:\/\/\S+/gi, '').trim();
+      const cleaned = stripQuotesAndUrls(withoutUrls);
       if (!cleaned && !rawTitle) return null;
 
       const sepMatch = cleaned.match(/^([^\n:—–-]{2,40})[\s]*[:—–\-\n]+[\s]*([\s\S]+)$/);
       if (sepMatch) {
-        return { word: sepMatch[1].trim(), meaning: sepMatch[2].trim() };
+        return {
+          word: stripQuotesAndUrls(sepMatch[1]),
+          meaning: stripQuotesAndUrls(sepMatch[2])
+        };
       }
 
-      const cleanTitle = rawTitle.replace(/\s*[-|]\s*Google Search.*$/i, '').trim();
+      // If only a single word or short phrase was shared (no definition text), leave meaning empty so dictionary lookup runs
+      if (cleaned.split(/\s+/).length <= 3) {
+        return { word: cleaned, meaning: '' };
+      }
+
+      const cleanTitle = stripQuotesAndUrls(rawTitle.replace(/\s*[-|]\s*Google Search.*$/i, ''));
       if (cleanTitle && cleanTitle.length <= 40 && cleaned) {
         return { word: cleanTitle, meaning: cleaned };
       }
@@ -515,14 +565,18 @@
 
         if (sharedWord || sharedText) {
           const parsed = sharedWord
-            ? { word: sharedWord, meaning: sharedMeaning || '' }
+            ? { word: stripQuotesAndUrls(sharedWord), meaning: stripQuotesAndUrls(sharedMeaning || '') }
             : parseSharedText(sharedText, sharedTitle || '');
 
           if (parsed && parsed.word) {
             document.getElementById('wordInput').value = parsed.word;
             document.getElementById('meaningInput').value = parsed.meaning;
             switchTab('add');
-            showToast(`Received shared word: "${parsed.word}"`, '📲');
+            if (!parsed.meaning) {
+              autoFillMeaningForWord(parsed.word);
+            } else {
+              showToast(`Received shared word: "${parsed.word}"`, '📲');
+            }
           }
         }
       } catch (e) {}
@@ -741,6 +795,14 @@
     });
 
     document.getElementById('smartPasteBtn').addEventListener('click', simulateBrowserShare);
+    document.getElementById('lookupMeaningBtn').addEventListener('click', () => {
+      const w = document.getElementById('wordInput').value.trim();
+      if (!w) {
+        showToast('Enter a word first', '💡');
+        return;
+      }
+      autoFillMeaningForWord(w);
+    });
     document.getElementById('runShareSimBtn').addEventListener('click', simulateBrowserShare);
 
     const pwaModal = document.getElementById('pwaModal');
