@@ -20,13 +20,13 @@
     body.dark-theme input, body.dark-theme textarea { background-color: #0f172a !important; color: #f1f5f9 !important; border-color: #334155 !important; }
     body.dark-theme .border-slate-100, body.dark-theme .border-slate-200, body.dark-theme .border-slate-200\/80 { border-color: #334155 !important; }
   </style>
-  <link rel="manifest" href="/manifest.json">
-  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
-  <link rel="apple-touch-icon" href="/icon-192.png">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').catch(() => {});
+        navigator.serviceWorker.register('sw.js').catch(() => {});
       });
     }
   </script>
